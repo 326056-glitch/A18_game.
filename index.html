@@ -274,7 +274,9 @@
         let totalKeystrokes = 0;
         let correctKeystrokes = 0;
         
-        let timeLeft = 60.0;
+        const GAME_DURATION = 60;
+        let timeLeft = GAME_DURATION;
+        let deadline = 0;
         let timerInterval = null;
         let isPlaying = false;
 
@@ -401,6 +403,7 @@
 
         document.addEventListener('keydown', (e) => {
             if (!isPlaying) return;
+            if (!updateTimer()) return;
             
             // Ignore system keys (Ctrl, Alt, Meta, Shift, Tab, etc)
             if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
@@ -453,12 +456,14 @@
         /* --- Game Loop & Timer --- */
         function startGame() {
             initAudio();
+            clearInterval(timerInterval);
             score = 0;
             combo = 0;
             maxCombo = 0;
             totalKeystrokes = 0;
             correctKeystrokes = 0;
-            timeLeft = 60.0;
+            timeLeft = GAME_DURATION;
+            deadline = performance.now() + GAME_DURATION * 1000;
             isPlaying = true;
             
             displays.score.innerText = score;
@@ -469,31 +474,37 @@
             switchScreen('game');
             spawnWord();
 
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                timeLeft -= 0.1;
-                if (timeLeft <= 0) {
-                    timeLeft = 0;
-                    endGame();
-                }
-                displays.time.innerText = timeLeft.toFixed(1);
-                displays.timeBar.style.width = `${(timeLeft / 60) * 100}%`;
-                
-                // Change bar color when time is low
-                if (timeLeft < 10) {
-                    displays.timeBar.style.backgroundColor = '#ef4444'; // Red
-                    displays.timeBar.style.boxShadow = '0 0 10px #ef4444';
-                } else {
-                    displays.timeBar.style.backgroundColor = '#0ea5e9'; // Blue
-                    displays.timeBar.style.boxShadow = '0 0 10px #0ea5e9';
-                }
+            timerInterval = setInterval(updateTimer, 100);
+        }
 
-            }, 100);
+        function updateTimer() {
+            if (!isPlaying) return false;
+            // Timer callbacks can be delayed; the deadline remains the same.
+            timeLeft = Math.max(0, (deadline - performance.now()) / 1000);
+            displays.time.innerText = timeLeft.toFixed(1);
+            displays.timeBar.style.width = `${(timeLeft / GAME_DURATION) * 100}%`;
+
+            // Change bar color when time is low
+            if (timeLeft < 10) {
+                displays.timeBar.style.backgroundColor = '#ef4444'; // Red
+                displays.timeBar.style.boxShadow = '0 0 10px #ef4444';
+            } else {
+                displays.timeBar.style.backgroundColor = '#0ea5e9'; // Blue
+                displays.timeBar.style.boxShadow = '0 0 10px #0ea5e9';
+            }
+
+            if (timeLeft === 0) {
+                endGame();
+                return false;
+            }
+            return true;
         }
 
         function endGame() {
+            if (!isPlaying) return;
             isPlaying = false;
             clearInterval(timerInterval);
+            timerInterval = null;
             
             // Calculate Stats
             const accuracy = totalKeystrokes > 0 ? Math.round((correctKeystrokes / totalKeystrokes) * 100) : 0;
